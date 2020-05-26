@@ -1,0 +1,230 @@
+---
+title: "MSCI 718 - Assignment2"
+author: "Karan Kohli and Rishabh Karwayun"
+date: "28/02/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggm)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(pastecs)
+library(ppcor)
+library(Rmisc)
+```
+
+# Tuberculosis Around the World
+```{r, include = FALSE, echo = FALSE}
+tb_burden <- read.csv("TB_burden_countries_2020-02-27.csv")
+tb_mdr_rr <- read.csv("MDR_RR_TB_burden_estimates_2020-02-27.csv")
+tb_notif <- read.csv("TB_notifications_2020-02-27.csv")
+```
+```{r, include = FALSE, echo = FALSE}
+tb_burden_2018 <- tb_burden %>% filter(year == "2018")
+sum(tb_burden_2018$e_inc_num)
+sum(tb_burden_2018$e_mort_num)
+```
+```{r, include = FALSE, echo = FALSE}
+tb_notif_mdr <- tb_notif %>%  filter(year == "2018") %>%  dplyr::select(country, conf_mdr)
+tb_mdr_rr_filtered <- tb_mdr_rr %>% dplyr::select(country, e_inc_rr_num)
+sum(tb_mdr_rr_filtered$e_inc_rr_num)
+sum(tb_notif_mdr$conf_mdr, na.rm = TRUE)
+```
+```{r, include = FALSE, echo = FALSE}
+tb_burden_2018_final <- tb_burden_2018 %>% dplyr::select(country, e_mort_num, g_whoregion)
+df_1 <- tb_burden_2018_final %>% left_join(tb_mdr_rr_filtered)
+df <- df_1 %>% left_join(tb_notif_mdr)
+df %>% summarise_all(list(~sum(is.na(.))))
+sum(df$e_mort_num)
+df <- mutate_at(df, vars(country), as.factor)
+df_nona <- df %>% drop_na(conf_mdr)
+df <- df_nona
+#df <- df_with_na %>% drop_na(conf_mdr)
+#df <- df %>%  col_types = cols(country=col_factor())
+```
+
+```{r echo = FALSE, include=FALSE}
+#df_test <- df %>% mutate(mort.log = log(e_mort_num))
+#shapiro.test(df_test$mort.log)
+#mort.sqrt <- df %>% sqrt(e_mort_num)
+
+df %>% ggplot(aes(sample=e_mort_num)) + stat_qq() + geom_qq_line(aes(color="red"))
+df %>% ggplot(aes(sample=e_inc_rr_num)) + stat_qq() + geom_qq_line(aes(color="red"))
+df %>% ggplot(aes(sample=conf_mdr)) + stat_qq() + geom_qq_line(aes(color="red"))
+#df_qq_test <- df %>% mutate(mort.log = log(e_mort_num)) %>% ggplot(aes(sample=mort.log)) + stat_qq() + geom_qq_line(aes(color="red"))
+#df_qq_test
+```
+Tuberculosis is a bacterial disease. It is estimated that atleast one in four people in the world are carrying a form of TB bacteria. However, only after the bacteria is activated does the carrier becomes infected with TB. The datasets explored are released from WHO and contain WHO-generated estimates of TB mortality, incidence (including disaggregation by age and sex and incidence of TB/HIV), case fatality ratio, treatment coverage (previously called case detection rate), proportion of TB cases that have rifampicin-resistant TB (RR-TB, which includes cases with multidrug-resistant TB, MDR-TB), RR/MDR-TB among notified pulmonary TB cases etc.
+
+WHO in its annual report states that globally more than 10 million people fell ill with TB. Approximately 1.5 million people died from the disease in 2018. Thus TB still remains to be a fatal disease globally. TB can be cured with appropriate medical assistance. One such drug used in TB treatments is Rifampicin. However, forms of TB bacterias have been found which are resitant to rifampicin. These are called RR-TB. TB can alse be resistant to multiple drugs that are used in the treatment. Such cases are called MDR-TB (Multiple Drug Resistant TB). Since these forms of bacteria are resistant to drugs used in treatments, it becomes much more difficult to monitor treatment and its outcomes than Drug-Susceptible TB. Hence, Drug-Resistant TB continues to be a public health threat.
+
+```{r echo=FALSE, fig.height=5, fig.width=10, message=FALSE, warning=FALSE}
+df_mort <- df %>% dplyr::group_by(g_whoregion) %>% dplyr::summarise(cases = sum(e_mort_num))
+df_inc <- df %>% dplyr::group_by(g_whoregion) %>% dplyr::summarise(cases = sum(e_inc_rr_num))
+mort_region <- df_mort %>% ggplot(aes(x = g_whoregion, y = cases/1000, fill = g_whoregion)) + geom_bar(stat = "identity") + ylab("Mortality Numbers (in thousands)") + xlab("Regions")  + ggtitle("            Region-wise Mortality Numbers") + labs(fill = "Region", caption = "Fig(2)")
+#+scale_x_discrete(breaks=c("AFR","AMR","EMR", "EUR", "SEA", "WPR"),
+#        labels=c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific")) + theme(axis.text.x = element_text(angle=90))
+rr_region<- df_inc %>% ggplot(aes(x = g_whoregion, y = cases/1000, fill = g_whoregion)) + geom_bar(stat = "identity") + ylab("RR-TB Cases (in thousands)") + xlab("Regions") + ggtitle("         Region-wise estimated RR-TB Cases ") + labs(fill = "Region", caption = "Fig(1)")
+grid.arrange(rr_region, mort_region, nrow =1)
+```
+
+In 2018, there were about half a million new cases of Rifampicin-Resistant TB, and close to 85000 cases of Multi Drug Resistant TB globally. It would be interesting to observe if number of cases of Drug Resistance TB has some relation with Mortality Rate of TB. A positive correlation may help in securing more funding for research on treatment of Drug Resistance TB.
+
+# Data Exploration and Summary
+To start with, datasets were analysed to find respective variables. Variable e_mort_num which signifies countrywise mortality numbers was chosen from Table 1 (TB_burden_countries) which had 4040 observations of 50 variables. Then we selected feature e_inc_rr_num signifying Estimated number of RR-TB cases from Table 2 (MDR_RR_TB_burden) containing 216 observations of 26 variables.Finally we selected variable conf_mdr which signifies Laboratory Confirmed MDR-TB cases from Table 3 (TB_notifications) which had 8286 observations of 164 variables.
+
+Since we only had data for RR-TB of the year 2018, we have considered all the data for this year only. The following steps were followed to get final data from above datasets. First we filtered the data in Tables 1 and 3 based on year (2018). Then, we selected the appropriate features from all three tables. After that, we joined filtered data from Table 1 with Table 2 using 'left-join'. Finally, we joined the result of the previous step with filtered data from Table 3 using 'left join'. There are 26 N/A values for MDR-TB cases which were removed. Hence we obtained our final dataset which is in Tidy format. 
+
+
+In our data, we have 216 observations of 5 variables. Two of the variables: Country and WHO-Region are factor variables, where as rest of them (Mortality numbers, RR-TB cases, MDR-TB cases) are integer variables having level of measurement as ratio. From Appendix 1, we can see that Mortality Numbers (e_mort_num) has a really diverse range of 449000 with standard deviation of 36130.5 and confidence interval ranging from 12895.044 to 2553.977. Similarly, Number of Incidence Cases of RR-TB (e_inc_rr_num) have a range of 130000 with a mean of 2515.4 and confidence interval ranging from 4150.5321 to 880.3521. Number of MDR Cases (conf_mdr) have a lower range value(24733) than the other 2 variables with confidence interval ranging from 744.7328 to 141.0040. All the other statistics of these varibales can be found in Appendix 1.   
+
+Plotting histograms and looking at the description of all the three ratio variables show that they all are poisitively skewed and leptokurtic.
+
+From the graphs in Appendix 2 we observe that there are some outliers for mortality rate, RR-TB estimates and MDR-TB incident cases. We cannot remove the outliers because they represent countries having a very high mortality rate;RR-TB and/or MDR cases. In this case we have to consider these outliers as part of our analysis since they contain important information.
+
+
+```{r echo = FALSE, fig.height=2, fig.width=10, message=FALSE, warning=FALSE}
+df_test <- df %>% 
+  ggplot(aes(x=e_mort_num)) + theme(legend.position = "none") +
+    geom_histogram(aes(y=..density..)) + 
+    stat_function(fun=dnorm, args=list(mean=mean(df$e_mort_num, na.rm=TRUE), sd=sd(df$e_mort_num, na.rm=TRUE))) + xlim(0,100000) + ylim(0, 0.00005) + xlab("Mortality Numbers") + labs(caption = "Fig(3)")
+df_test_rr <- df %>% 
+  ggplot(aes(x=e_inc_rr_num)) + theme(legend.position = "none") +
+    geom_histogram(aes(y=..density..)) + 
+    stat_function(fun=dnorm, args=list(mean=mean(df$e_inc_rr_num, na.rm=TRUE), sd=sd(df$e_inc_rr_num, na.rm=TRUE))) + xlim(0,100000) + ylim(0,0.00005) + xlab("RR-TB Cases") +  labs(caption = "Fig(4)")
+df_test_mdr <- df %>% 
+  ggplot(aes(x=conf_mdr)) + theme(legend.position = "none") +
+    geom_histogram(aes(y=..density..)) + 
+    stat_function(fun=dnorm, args=list(mean=mean(df$conf_mdr, na.rm=TRUE), sd=sd(df$conf_mdr, na.rm=TRUE))) + xlim(0,10000) + ylim(0,0.00020) + xlab("MDR-TB Cases") +  labs(caption = "Fig(5)")
+grid.arrange(df_test, df_test_rr, df_test_mdr, nrow = 1, top = "Normality Distributions")
+```
+
+
+To find correlation, we first check the assumptions for parametric models.
+
+```{r, echo = FALSE}
+shapiro.test(df$e_mort_num)
+```
+
+
+```{r, include=FALSE, echo = FALSE}
+shapiro.test(df$e_inc_rr_num)
+shapiro.test(df$conf_mdr)
+```
+
+
+The Shapiro-Wilk test found that the mortality numbers were significantly non-normal at the 5% level of significance (W=0.19544, p<0.05). The non-normality can also be seen visually in the histogram plotted in Fig (3). Similarly, conf_mdr and e_inc_rr_num were also found to be non-normal as seen in Fig(4) and Fig(5) and confirmed with Shapiro-Wilk normality test.
+
+
+### Hypothesis
+We want to test correlation between Mortality Numbers and Estimated Cases of Drug Resistant TB.
+
+**Null Hypothesis**: There is 0 correlation between Mortality Numbers and Estimated Cases of RR-TB.
+
+**Alternate Hypothesis**: There is non-zero correlation between Mortality Numbers and Estimated Cases of RR-TB.
+
+
+# Analyzing the Selected Variables
+As inferred above, since the features are not normal, we cannot proceed with Pearson's correlation method. Therefore, to test our hypothesis, we use Kendall-Tau's method to find correlation.
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+
+cor.test(df$e_mort_num, df$e_inc_rr_num, method = "kendall")
+```
+
+
+From the correlation test between Mortality Numbers and RR-TB estimated cases, we infer that Mortality cases are significantly correlated with RR-TB estimated cases, with correlation coefficient = 0.7758 (p < 2.2e-16). A correlation of 0.7758 represents large effect explaing 60.18% of the variance. Since we have a substantially small p-value, we reject the Null Hypothesis and proceed with the alternate hypothesis stating that there is some correlation between the two stated variables. 
+
+In the data, there are two types of Drug Resistant TB: RR-TB and MDR-TB. Multi Drug Resistant TB (MDR-TB) is a wider sector and  encompasses drugs other than Rifampicin. So, we wanted to observe how number of MDR-TB cases affect the correlation between Mortality Number and RR-TB cases and how strong is the correlation between Rifampicin Drug Resistant TB alone with Mortality numbers. Hence, we do some further tests. 
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+df %>% dplyr::select(e_mort_num, e_inc_rr_num, conf_mdr) %>% cor(use = "complete.obs", method = "kendall")
+```
+
+
+From the correlation matrix, we observe that all the variables under observation are strongly correlated to one another indicating that both RR-TB and MDR-TB highly affect the mortality cases. Moreover we see that the cases of RR-TB and MDR-TB (correlation coeff = 0.7391) are also highly correlated.
+
+It would be interesting to observe how MDR-TB cases affect the correlation of RR-TB Cases with Mortality Numbers. And to analyse that, we perform a partial correlation test between RR-TB cases and Mortality Numbers with MDR-TB cases being the control variable.
+
+```{r echo=FALSE, warning=FALSE, include = FALSE}
+df_test_corr <- df_nona %>% dplyr::select(e_mort_num, e_inc_rr_num, conf_mdr)
+pc <- ppcor::pcor(df_test_corr, method = c("kendall"))
+pc
+```
+
+```{r echo=FALSE, warning=FALSE}
+# pcor.test(pc, 1, 190)
+ppcor::pcor.test(df_nona$e_mort_num, df_nona$e_inc_rr_num, df_nona$conf_mdr, method = c("kendall"))
+```
+The partial correlation between Mortality Numbers, RR-TB cases and MDR-TB cases is 0.6200382, and the variance shared between them is 38.44%. This is a truer estimate of unique correlation between Mortality Numbers and RR-TB cases.
+
+```{r echo=FALSE, fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+# cor.test(df$e_mort_num, df$conf_mdr, method = "kendall")
+# cor.test(df$e_inc_rr_num, df$conf_mdr)
+g1 <- df %>% ggplot(aes(x = e_inc_rr_num/1000, y = e_mort_num/1000)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlab("RR-TB Cases") + ylab("Mortality Numbers") + labs(color = "Region", caption = "Fig(6)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+g2 <- df %>% ggplot(aes(x = e_inc_rr_num, y = e_mort_num)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + ylim(0, 500) +xlim(0, 500) + xlab("RR-TB Cases") + ylab("Mortality Numbers") + labs(color = "Region", caption = "Fig(7)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+g3 <- df %>% ggplot(aes(x = conf_mdr/1000, y = e_mort_num/1000)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlab("MDR-TB Cases") + ylab("Mortality Numbers") + labs(color = "Region", caption = "Fig(8)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+g4 <- df %>% ggplot(aes(x = conf_mdr, y = e_mort_num)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlim(0,500) + ylim(0,500) + xlab("MDR-TB Cases") + ylab("Mortality Numbers") + labs(color = "Region", caption = "Fig(9)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+g5 <- df %>% ggplot(aes(x = conf_mdr/1000, y = e_inc_rr_num/1000)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlab("MDR-TB Cases") + ylab("RR-TB Cases") + labs(color = "Region", caption = "Fig(10)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+g6 <- df %>% ggplot(aes(x = conf_mdr, y = e_inc_rr_num)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlim(0,500) + ylim(0,500) + xlab("MDR-TB Cases") + ylab("RR-TB Cases") + labs(color = "Region", caption = "Fig(11)") + scale_color_hue(labels = c("Africa", "Americas", "Eastern Mediterranean", "Europe", "SE Asia", "Western Pacific"))
+grid.arrange(g1, g2, g3, g4, g5, g6, nrow = 3, top = "Scatter Plots b/w Variables", bottom = "For Fig(6), Fig(8) and Fig(10), all the variables are in thousands.\n Fig(6), Fig(8), Fig(10) are the original graphs while Fig(7), Fig(9), Fig(11)\n are the scaled down versions of original graphs respectively, to show the correlation more accurately. ")
+#g3 <- df_without_na %>% ggplot(aes(x = e_inc_tbhiv_num, y = e_mort_num)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlim(0,500) + ylim(0,500)
+#g4 <- df_without_na %>% ggplot(aes(x = e_inc_tbhiv_num, y = e_mort_num)) + geom_point(aes(color = g_whoregion)) + geom_smooth(method = "lm") + xlim(0,500) + ylim(0,500)
+#cor.test(tb_rr_mdr_burden_without_na$e_mort_num, tb_rr_mdr_burden_without_na$e_rr_in_notified_labconf_pulm)
+#tb_rr_mdr_burden_without_na %>% ggplot(aes(x = e_inc_rr_num, y = e_mort_num)) + geom_point(aes(color = g_whoregion))
+#tb_rr_mdr_burden_without_na %>% ggplot(aes(x = e_rr_in_notified_labconf_pulm, y = e_mort_num)) + geom_point(aes(color = g_whoregion))
+```
+
+From the test we see that there is a large correlation between Mortality Numbers and RR-TB cases (correlation coeff = 0.6200382, p =8.806177e-37) when controlling the effect of MDR-TB cases.
+
+This is less than the full correlation of 0.7758, which explained 60.18% of the variance when MDR-TB cases were not controlled for. We thus conclude that Mortality Numbers and RR-TB cases have a strong correlation and there is also a complex relationship between Mortality Numbers, RR-TB cases and MDR-TB cases.
+
+# Conclusion
+From the analysis, we observe that Drug Resistant TBs are a major factor affecting Mortality numbers worldwide. It can be seen that RR-TB cases are strongly correlated to Mortality numbers. Looking at Multi Drug Resistant TB cases for further concrete analysis, we see that MDR-TB also plays a significant role in this correlation amongst Drug Resistance in TBs and Mortality numbers. A strong correlation indicates that as number of RR-TB cases increase we see an increase in Mortality numbers too. Whether there exists a causal relationship between the two or not is subject to further research.
+
+
+# Appendix
+
+## Appendix 1
+
+```{r echo=FALSE}
+summary(df)
+str(df)
+
+desc_stat <- stat.desc(df)
+desc_stat
+#dim(desc_stat)
+is.num <- sapply(desc_stat, is.numeric)
+desc_stat[is.num] <- lapply(desc_stat[is.num], round, 1)
+# transpose
+desc_stat_t <- t(desc_stat)
+colnames(desc_stat_t) <- rownames(desc_stat)
+rownames(desc_stat_t) <- colnames(desc_stat)
+desc_stat_t[c(2,4,5), c(4,5,6,8,9,13)]
+
+CI(df$e_mort_num)
+CI(df$e_inc_rr_num)
+CI(df$conf_mdr)
+```
+
+## Appendix 2
+
+```{r echo=FALSE}
+outliers_mort <- df %>% ggplot(aes(x = seq(e_mort_num), y = e_mort_num)) + geom_point()
+outliers_rr <- df %>% ggplot(aes(x = seq(e_inc_rr_num), y = e_inc_rr_num)) + geom_point()
+outliers_mdr <- df %>% ggplot(aes(x = seq(conf_mdr), y = conf_mdr)) + geom_point()
+outliers_mort
+outliers_rr
+outliers_mdr
+```
+
+# References
+
+https://apps.who.int/iris/bitstream/handle/10665/329368/9789241565714-eng.pdf?ua=1
+
+http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R5_Correlation-Regression/R5_Correlation-Regression3.html
